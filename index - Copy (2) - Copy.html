@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ SafeHand Scanner — 5 Reglas de Oro de Seguridad</title>
+    <meta name="description"
+        content="Sistema de reconocimiento de mano enfocado en seguridad laboral SST. Muestra de 1 a 5 dedos para aprender las reglas de oro.">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            background: #0b0c10;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden
+        }
+
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            background-image: linear-gradient(rgba(255, 170, 0, .03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 170, 0, .03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0
+        }
+
+        .scanline {
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 170, 0, .012) 2px, rgba(255, 170, 0, .012) 4px);
+            pointer-events: none;
+            z-index: 1
+        }
+
+        .container {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+            justify-content: center;
+            overflow: hidden
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2px
+        }
+
+        .header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1rem, 3.5vw, 1.6rem);
+            font-weight: 900;
+            background: linear-gradient(135deg, #ffaa00, #ff6600, #ff3300);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 2px;
+            text-transform: uppercase
+        }
+
+        .header .subtitle {
+            color: rgba(255, 255, 255, .3);
+            font-size: .72rem;
+            margin-top: 5px;
+            letter-spacing: 3px;
+            text-transform: uppercase
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 193, 7, .08);
+            border: 1px solid rgba(255, 193, 7, .2);
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: .65rem;
+            color: #ffc107;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1.5px;
+            margin-top: 8px
+        }
+
+        .badge .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ffc107;
+            animation: pulse 1.5s infinite
+        }
+
+        .mini-logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            z-index: 100;
+            filter: drop-shadow(0 0 10px rgba(112, 32, 130, 0.5));
+        }
+
+        .video-wrapper {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+            z-index: 2
+        }
+
+        .video-wrapper.detected {
+            box-shadow: inset 0 0 100px rgba(255, 170, 0, 0.1)
+        }
+
+        .corner {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            z-index: 5
+        }
+
+        .corner-tl {
+            top: -1px;
+            left: -1px;
+            border-top: 3px solid #ffc107;
+            border-left: 3px solid #ffc107
+        }
+
+        .corner-tr {
+            top: -1px;
+            right: -1px;
+            border-top: 3px solid #ffc107;
+            border-right: 3px solid #ffc107
+        }
+
+        .corner-bl {
+            bottom: -1px;
+            left: -1px;
+            border-bottom: 3px solid #702082;
+            border-left: 3px solid #702082
+        }
+
+        .corner-br {
+            bottom: -1px;
+            right: -1px;
+            border-bottom: 3px solid #702082;
+            border-right: 3px solid #702082
+        }
+
+        video {
+            display: none
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            transform: scaleX(-1)
+        }
+
+        .overlay-scan {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 3
+        }
+
+        .overlay-scan::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, rgba(255, 170, 0, .5), transparent);
+            animation: scanMove 2.5s ease-in-out infinite;
+            opacity: 0
+        }
+
+        .video-wrapper.scanning .overlay-scan::after {
+            opacity: 1
+        }
+
+        @keyframes scanMove {
+            0% {
+                top: 0
+            }
+
+            100% {
+                top: calc(100% - 3px)
+            }
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 25px;
+            background: rgba(11, 12, 16, .7);
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            z-index: 50
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            box-shadow: 0 0 8px rgba(255, 68, 68, .6);
+            transition: all .5s ease;
+            flex-shrink: 0
+        }
+
+        .status-dot.active {
+            background: #ffaa00;
+            box-shadow: 0 0 12px rgba(255, 170, 0, .8);
+            animation: pulse 1.5s ease-in-out infinite
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1
+            }
+
+            50% {
+                transform: scale(1.4);
+                opacity: .7
+            }
+        }
+
+        .status-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: .7rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, .4)
+        }
+
+        .status-text.active {
+            color: #ffaa00
+        }
+
+        .finger-count-display {
+            position: absolute;
+            top: 50%;
+            right: 30px;
+            transform: translateY(-50%) translateX(20px);
+            z-index: 25;
+            width: 400px;
+            max-width: calc(100% - 60px);
+            transition: all .5s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .finger-count-display.visible {
+            transform: translateY(-50%) translateX(0);
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .count-panel {
+            background: rgba(11, 12, 16, .92);
+            border: 1px solid rgba(255, 170, 0, .20);
+            border-radius: 18px;
+            backdrop-filter: blur(18px);
+            box-shadow: 0 0 35px rgba(255, 170, 0, .08);
+            padding: 14px 16px;
+            max-height: 45vh;
+            overflow-y: auto;
+        }
+
+        .count-big {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .count-number {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2rem, 6vw, 3rem);
+            font-weight: 900;
+            background: linear-gradient(135deg, #ffaa00, #ff6600);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+        }
+
+        .count-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: .65rem;
+            color: rgba(255, 255, 255, .4);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .finger-visual {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .finger-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .finger-bar {
+            width: 24px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .08);
+            transition: all .4s ease;
+            border: 1px solid rgba(255, 255, 255, .05);
+        }
+
+        .finger-icon.is-up .finger-bar {
+            background: linear-gradient(180deg, #ffaa00, rgba(255, 102, 0, .4));
+            box-shadow: 0 0 15px rgba(255, 170, 0, .4);
+            border-color: rgba(255, 170, 0, .5);
+        }
+
+        .finger-bar.f-thumb {
+            height: 30px;
+            width: 28px
+        }
+
+        .finger-bar.f-index {
+            height: 44px
+        }
+
+        .finger-bar.f-middle {
+            height: 48px
+        }
+
+        .finger-bar.f-ring {
+            height: 42px
+        }
+
+        .finger-bar.f-pinky {
+            height: 34px
+        }
+
+        .finger-name {
+            font-size: .55rem;
+            color: rgba(255, 255, 255, .3);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .finger-icon.is-up .finger-name {
+            color: #ffaa00;
+        }
+
+        .message-card {
+            background: rgba(255, 170, 0, .04);
+            border: 1px solid rgba(255, 170, 0, .15);
+            border-radius: 12px;
+            padding: 12px;
+            max-width: 100%;
+            margin: 0 auto;
+            animation: slideUp .5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1
+            }
+        }
+
+        .message-icon {
+            font-size: 1.6rem;
+            margin-bottom: 4px;
+        }
+
+        .message-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(.75rem, 2vw, .95rem);
+            font-weight: 700;
+            color: #ffaa00;
+            margin-bottom: 6px;
+            letter-spacing: 1px;
+            line-height: 1.3;
+        }
+
+        .message-text {
+            font-size: clamp(.68rem, 1.8vw, .82rem);
+            line-height: 1.45;
+            color: rgba(255, 255, 255, .65);
+        }
+
+        .epp-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .epp-tag {
+            background: rgba(255, 170, 0, .1);
+            border: 1px solid rgba(255, 170, 0, .2);
+            border-radius: 8px;
+            padding: 2px 6px;
+            font-size: .58rem;
+            color: #ffaa00;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+        }
+
+        /* ===== RESPONSIVE PARA CELULARES ===== */
+        @media (max-width:768px) {
+            .header {
+                top: 15px !important;
+            }
+
+            .header h1 {
+                font-size: 1.1rem;
+            }
+
+            .header .subtitle {
+                font-size: 0.6rem;
+            }
+
+            .finger-count-display {
+                top: auto;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                transform: translateY(20px);
+                width: 100%;
+                max-width: none;
+            }
+
+            .finger-count-display.visible {
+                transform: translateY(0);
+            }
+
+            .count-panel {
+                padding: 15px;
+                max-height: 45vh;
+                border-radius: 20px 20px 0 0;
+                border-bottom: none;
+            }
+
+            .instructions {
+                padding: 20px;
+                width: 95%;
+            }
+
+            .instructions-title {
+                font-size: 0.9rem;
+            }
+
+            .instructions-text {
+                font-size: 0.8rem;
+            }
+
+            .status-bar {
+                bottom: 15px;
+                padding: 8px 15px;
+                font-size: 0.6rem;
+            }
+        }
+
+        .loading-msg {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 4;
+            background: #000;
+            font-family: 'Orbitron', sans-serif;
+            font-size: .75rem;
+            color: rgba(255, 170, 0, .5);
+            letter-spacing: 2px;
+            text-align: center;
+            padding: 20px
+        }
+
+        .loading-msg.hidden {
+            display: none
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(255, 170, 0, .15);
+            border-top-color: #ffaa00;
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+            margin: 0 auto 12px
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .particles-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1
+        }
+
+        .safety-strip {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: repeating-linear-gradient(90deg, #ffaa00 0, #ffaa00 20px, #1a1a2e 20px, #1a1a2e 40px);
+            z-index: 100;
+            opacity: .7
+        }
+
+        .safety-strip-bottom {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: repeating-linear-gradient(90deg, #ffaa00 0, #ffaa00 20px, #1a1a2e 20px, #1a1a2e 40px);
+            z-index: 100;
+            opacity: .5
+        }
+
+        #threeCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6
+        }
+
+        .instructions {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            width: 90%;
+            max-width: 500px;
+            background: rgba(11, 12, 16, 0.95);
+            border: 1px solid rgba(255, 170, 0, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 170, 0, 0.1);
+            text-align: center;
+            transition: all 0.5s ease;
+        }
+
+        .instructions.hidden {
+            opacity: 0;
+            visibility: hidden;
+            transform: translate(-50%, -40%);
+        }
+
+        .instructions-btn {
+            display: none;
+        }
+
+        .gesture-guide {
+            margin-top: 20px;
+            font-family: 'Orbitron', sans-serif;
+            color: #ffc107;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            animation: pulse 1.5s infinite;
+        }
+
+        /* ===== FINALE STYLES ===== */
+        .medal-container {
+            position: fixed;
+            top: -150px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            width: 200px;
+            height: 200px;
+            pointer-events: none;
+            transition: top 2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s;
+            opacity: 0;
+        }
+
+        .medal-container.falling {
+            opacity: 1;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .medal-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 0 30px rgba(255, 170, 0, 0.8));
+            animation: medalGlow 2s infinite alternate;
+        }
+
+        @keyframes medalGlow {
+            from {
+                filter: drop-shadow(0 0 20px rgba(255, 170, 0, 0.6));
+            }
+
+            to {
+                filter: drop-shadow(0 0 40px rgba(255, 170, 0, 1));
+                transform: scale(1.05);
+            }
+        }
+
+        .heart-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 150;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        .heart-overlay.active {
+            opacity: 1;
+        }
+
+        .heart-svg {
+            width: 300px;
+            height: 300px;
+            fill: none;
+            stroke: #ffaa00;
+            stroke-width: 2;
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            filter: drop-shadow(0 0 15px #ffaa00);
+        }
+
+        .heart-overlay.active .heart-svg {
+            animation: drawHeart 3s forwards ease-in-out;
+        }
+
+        @keyframes drawHeart {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        .congrats-banner {
+            position: fixed;
+            bottom: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(11, 12, 16, 0.9);
+            padding: 20px 40px;
+            border-radius: 50px;
+            border: 1px solid #ffaa00;
+            z-index: 210;
+            font-family: 'Orbitron', sans-serif;
+            color: #ffaa00;
+            text-align: center;
+            transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0;
+            box-shadow: 0 0 30px rgba(255, 170, 0, 0.3);
+        }
+
+        .congrats-banner.visible {
+            bottom: 100px;
+            opacity: 1;
+        }
+
+        .instructions-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #ffaa00;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+
+        .instructions-text {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 20px;
+        }
+
+        .instructions-steps {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.60rem;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.55);
+        }
+
+        @media (max-width: 768px) {
+            .instructions {
+                top: 10px;
+                left: 10px;
+                width: calc(100% - 20px);
+                max-width: none;
+                padding: 10px 12px;
+            }
+
+            .instructions-title {
+                font-size: 0.68rem;
+            }
+
+            .instructions-text {
+                font-size: 0.70rem;
+            }
+
+            .instructions-steps {
+                font-size: 0.55rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="safety-strip"></div>
+    <div class="safety-strip-bottom"></div>
+    <div class="bg-grid"></div>
+    <div class="scanline"></div>
+    <canvas class="particles-canvas" id="particlesCanvas"></canvas>
+
+    <!-- Finale Elements -->
+    <div class="heart-overlay" id="heartOverlay">
+        <svg class="heart-svg" viewBox="0 0 100 100">
+            <path
+                d="M50,30 C50,30 45,20 35,20 C25,20 20,30 20,40 C20,60 50,80 50,80 C50,80 80,60 80,40 C80,30 75,20 65,20 C55,20 50,30 50,30 Z" />
+        </svg>
+    </div>
+    <div class="medal-container" id="medalContainer">
+        <img src="sinba.png" class="medal-img" alt="Logo Sinba">
+    </div>
+    <div class="congrats-banner" id="congratsBanner">
+        <h2 style="margin:0; font-size: 1.2rem;">✨ ¡FELICIDADES! ✨</h2>
+        <p style="margin:5px 0 0; font-size: 0.8rem; opacity: 0.8;">Has completado el entrenamiento Sinba</p>
+    </div>
+    <audio id="winMusic" src="nastelbom-happy-happy-piano-513420.mp3"></audio>
+    <img src="sinba.png" class="mini-logo">
+    <div class="container">
+        <div class="header"
+            style="position: absolute; top: 30px; left: 0; width: 100%; z-index: 50; pointer-events: none;">
+            <h1 style="background: linear-gradient(135deg, #ffc107, #702082);">🛡️ SafeHand Scanner</h1>
+            <p class="subtitle">Sinba — Seguridad para el Futuro</p>
+            <div class="badge"><span class="dot"></span> SST ACTIVO</div>
+        </div>
+
+        <div class="video-wrapper" id="videoWrapper">
+            <div class="instructions">
+                <div class="instructions-title">🔒 ACCESO BIOMÉTRICO SINBA</div>
+                <div class="instructions-text">
+                    Muestra el <strong>gesto de Sinba (✌️)</strong> para desbloquear el entrenamiento.
+                </div>
+
+                <div
+                    style="margin: 15px 0; padding: 10px; background: rgba(112, 32, 130, 0.2); border-radius: 10px; border: 1px solid rgba(255, 193, 7, 0.3);">
+                    <div style="font-size: 0.7rem; color: #ffc107; margin-bottom: 8px; font-family: 'Orbitron';">
+                        CONTENIDO DEL ENTRENAMIENTO:</div>
+                    <div class="instructions-steps"
+                        style="font-size: 0.65rem; color: rgba(255,255,255,0.8); text-align: left; display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                        <span>✋ 1 Dedo: Regla 1</span>
+                        <span>✌️ 2 Dedos: Regla 2</span>
+                        <span>🤟 3 Dedos: Regla 3</span>
+                        <span>🖖 4 Dedos: Regla 4</span>
+                        <span>🖐️ 5 Dedos: Regla 5</span>
+                    </div>
+                </div>
+
+                <div class="gesture-guide" style="font-size: 1rem; color: #ffc107; margin-top: 10px;">✌️ ESPERANDO GESTO
+                    DE INICIO...</div>
+            </div>
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+            <video id="video" playsinline></video>
+            <canvas id="canvas"></canvas>
+            <canvas id="threeCanvas"></canvas>
+            <div class="overlay-scan"></div>
+            <div class="loading-msg" id="loadingMsg">
+                <div>
+                    <div class="spinner"></div>Inicializando escáner de seguridad...
+                </div>
+            </div>
+            <div class="finger-count-display" id="fingerCountDisplay">
+                <div class="count-panel">
+                    <div class="count-big">
+                        <div class="count-number" id="countNumber">0</div>
+                        <div class="count-label" id="countLabel">REGLA</div>
+                    </div>
+                    <div class="finger-visual" id="fingerVisual">
+                        <div class="finger-icon" data-finger="thumb">
+                            <div class="finger-bar f-thumb"></div><span class="finger-name">Pulgar</span>
+                        </div>
+                        <div class="finger-icon" data-finger="index">
+                            <div class="finger-bar f-index"></div><span class="finger-name">Índice</span>
+                        </div>
+                        <div class="finger-icon" data-finger="middle">
+                            <div class="finger-bar f-middle"></div><span class="finger-name">Medio</span>
+                        </div>
+                        <div class="finger-icon" data-finger="ring">
+                            <div class="finger-bar f-ring"></div><span class="finger-name">Anular</span>
+                        </div>
+                        <div class="finger-icon" data-finger="pinky">
+                            <div class="finger-bar f-pinky"></div><span class="finger-name">Meñique</span>
+                        </div>
+                    </div>
+                    <div class="message-card" id="messageCard">
+                        <div class="message-icon" id="msgIcon">🛡️</div>
+                        <div class="message-title" id="msgTitle"></div>
+                        <div class="message-text" id="msgText"></div>
+                        <div class="epp-tags" id="eppTags"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="status-dot" id="statusDot"></div>
+            <span class="status-text" id="statusText">Esperando cámara</span>
+            <div class="finger-display" id="fingerDisplay">
+                <div class="finger-dot" data-f="0"></div>
+                <div class="finger-dot" data-f="1"></div>
+                <div class="finger-dot" data-f="2"></div>
+                <div class="finger-dot" data-f="3"></div>
+                <div class="finger-dot" data-f="4"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/loaders/GLTFLoader.js" type="module"></script>
+    <script>
+        const videoEl = document.getElementById('video'), canvasEl = document.getElementById('canvas'), ctx = canvasEl.getContext('2d'), videoWrapper = document.getElementById('videoWrapper'), loadingMsg = document.getElementById('loadingMsg'), statusDot = document.getElementById('statusDot'), statusText = document.getElementById('statusText'), fingerDots = document.querySelectorAll('.finger-dot'), fingerCountDisplay = document.getElementById('fingerCountDisplay'), countNumber = document.getElementById('countNumber'), countLabel = document.getElementById('countLabel'), fingerIcons = document.querySelectorAll('.finger-icon'), msgIcon = document.getElementById('msgIcon'), msgTitle = document.getElementById('msgTitle'), msgText = document.getElementById('msgText'), eppTags = document.getElementById('eppTags'), particlesCanvas = document.getElementById('particlesCanvas'), pCtx = particlesCanvas.getContext('2d');
+
+        const HAND_CONNECTIONS = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16], [0, 17], [17, 18], [18, 19], [19, 20], [5, 9], [9, 13], [13, 17]];
+
+        const messages = {
+            1: {
+                icon: '🛡️',
+                title: 'REGLA 1 — USO OBLIGATORIO DE BARANDAS',
+                text: 'Utiliza siempre las barandas y pasamanos al subir o bajar escaleras, plataformas y accesos elevados. No las ignores ni las uses como perchero improvisado. Una mano en la baranda puede evitar una caída y convertir un "casi me voy" en un "todo bien".',
+                epps: ['BARANDAS', 'PASAMANOS', 'ESCALERAS', 'PLATAFORMAS']
+            },
+            2: {
+                icon: '📵',
+                title: 'REGLA 2 — NO USAR CELULAR EN ÁREAS OPERATIVAS Y NO CORRER',
+                text: 'El uso del celular está prohibido en áreas operativas, salvo autorización expresa para tareas específicas. Asimismo, está prohibido correr dentro de las instalaciones, ya que puede provocar resbalones, caídas o choques con equipos y personas. Camina siempre con atención y a paso seguro. El único "like" importante es llegar sano a casa.',
+                epps: ['SEÑALIZACIÓN', 'PROHIBICIÓN', 'ATENCIÓN', 'DISCIPLINA']
+            },
+            3: {
+                icon: '🎯',
+                title: 'REGLA 3 — ENFÓCATE EN LA TAREA ASIGNADA',
+                text: 'Mantén tu atención en la actividad que estás realizando. No improvises ni ejecutes tareas no autorizadas. Si tienes dudas, consulta antes de actuar. En seguridad, la multitarea solo funciona si incluye pensar y preguntar.',
+                epps: ['PETAR', 'ATS', 'IPERC', 'CHECK-LIST']
+            },
+            4: {
+                icon: '🦺',
+                title: 'REGLA 4 — USA LOS EPP ADECUADOS SEGÚN TU TAREA O ROL',
+                text: 'Antes de iniciar cualquier labor, verifica que cuentas con los Equipos de Protección Personal requeridos y que se encuentran en buen estado. Cada EPP es una barrera vital entre tú y el riesgo.',
+                epps: ['CASCO', 'LENTES', 'GUANTES', 'BOTAS', 'ARNÉS', 'RESPIRADOR']
+            },
+            5: {
+                icon: '🤝',
+                title: 'REGLA 5 — CUIDA DE MIS COMPAÑEROS COMO DE MÍ MISMO',
+                text: 'La seguridad es una responsabilidad compartida. Si observas una condición o acto inseguro, intervén y comunica de inmediato. Hoy por ti, mañana por mí; en seguridad, todos somos guardianes de todos.',
+                epps: ['COMUNICACIÓN', 'OBSERVACIÓN', 'REPORTE', 'TRABAJO EN EQUIPO']
+            }
+        };
+
+        // Particles
+        let particles = [];
+        function resizeParticles() { particlesCanvas.width = window.innerWidth; particlesCanvas.height = window.innerHeight }
+        resizeParticles(); window.addEventListener('resize', resizeParticles);
+        function initParticles() { particles = []; for (let i = 0; i < 40; i++) { particles.push({ x: Math.random() * particlesCanvas.width, y: Math.random() * particlesCanvas.height, vx: (Math.random() - .5) * .25, vy: (Math.random() - .5) * .25, size: Math.random() * 2 + .5, alpha: Math.random() * .25 + .05 }) } }
+        initParticles();
+        function drawParticles() {
+            pCtx.clearRect(0, 0, particlesCanvas.width, particlesCanvas.height);
+            particles.forEach((p, index) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.gravity) p.vy += p.gravity;
+                if (p.life !== undefined) {
+                    p.alpha -= 0.01;
+                    if (p.alpha <= 0) {
+                        particles.splice(index, 1);
+                        return;
+                    }
+                }
+
+                if (p.x < 0) p.x = particlesCanvas.width;
+                if (p.x > particlesCanvas.width) p.x = 0;
+                if (p.y < 0) p.y = particlesCanvas.height;
+                if (p.y > particlesCanvas.height) p.y = 0;
+
+                pCtx.beginPath();
+                pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                pCtx.fillStyle = p.color || `rgba(255,170,0,${p.alpha})`;
+                if (p.life) {
+                    pCtx.shadowBlur = 15;
+                    pCtx.shadowColor = p.color || '#ffaa00';
+                }
+                pCtx.fill();
+                pCtx.shadowBlur = 0;
+            });
+            requestAnimationFrame(drawParticles);
+        }
+        drawParticles();
+
+        function drawHandSkeleton(landmarks) {
+            const w = canvasEl.width, h = canvasEl.height;
+
+            // 1. Dibujar Conexiones "Neurales" (Líneas Premium)
+            HAND_CONNECTIONS.forEach(([start, end]) => {
+                const s = landmarks[start], e = landmarks[end];
+                ctx.beginPath();
+                ctx.moveTo(s.x * w, s.y * h);
+                ctx.lineTo(e.x * w, e.y * h);
+
+                // Gradiente en la línea para un toque de calidad
+                const lineGrad = ctx.createLinearGradient(s.x * w, s.y * h, e.x * w, e.y * h);
+                lineGrad.addColorStop(0, 'rgba(112, 32, 130, 0.4)'); // Púrpura Sinba
+                lineGrad.addColorStop(1, 'rgba(255, 193, 7, 0.4)');  // Amarillo Sinba
+
+                ctx.strokeStyle = lineGrad;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+
+            // 2. Dibujar Orbes de Energía (Puntos)
+            landmarks.forEach((lm, idx) => {
+                const x = lm.x * w, y = lm.y * h;
+
+                // Brillo radial (Aura)
+                const grad = ctx.createRadialGradient(x, y, 0, x, y, 12);
+                grad.addColorStop(0, idx === 0 ? 'rgba(255, 193, 7, 0.6)' : 'rgba(112, 32, 130, 0.6)');
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                ctx.beginPath();
+                ctx.arc(x, y, 12, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                // Punto central brillante
+                ctx.beginPath();
+                ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = idx === 0 ? '#ffc107' : '#9c27b0';
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function countFingers(landmarks) {
+            const lm = landmarks;
+            const thumbExtended = lm[4].x > lm[3].x;
+            const indexExtended = lm[8].y < lm[6].y;
+            const middleExtended = lm[12].y < lm[10].y;
+            const ringExtended = lm[16].y < lm[14].y;
+            const pinkyExtended = lm[20].y < lm[18].y;
+            const fingers = [thumbExtended, indexExtended, middleExtended, ringExtended, pinkyExtended];
+            return { count: fingers.filter(Boolean).length, fingers };
+        }
+
+        function updateFingerDots(fingers) { fingers.forEach((isUp, i) => { if (fingerDots[i]) fingerDots[i].classList.toggle('up', isUp) }) }
+        function updateFingerVisual(fingers) { ['thumb', 'index', 'middle', 'ring', 'pinky'].forEach((n, i) => { if (fingerIcons[i]) fingerIcons[i].classList.toggle('is-up', fingers[i]) }) }
+
+        let lastCount = -1, stableCount = 0, speakTriggered = new Set(), seenRules = new Set(), appState = 'STANDBY', standbyStable = 0;
+
+        function updateDisplay(count, fingers) {
+            if (appState !== 'SCANNING') return;
+            updateFingerDots(fingers); updateFingerVisual(fingers);
+            if (count > 0 && count !== lastCount) { stableCount++; if (stableCount >= 5) { lastCount = count; stableCount = 0; showCountInfo(count, fingers) } }
+            else if (count === lastCount) { stableCount++ } else { stableCount = 0 }
+        }
+
+        function showCountInfo(count, fingers) {
+            if (!messages[count]) return;
+            seenRules.add(count);
+            const msg = messages[count];
+            countNumber.textContent = count;
+            countLabel.textContent = 'REGLA DE ORO';
+            msgIcon.textContent = msg.icon;
+            msgTitle.textContent = msg.title;
+            msgText.textContent = msg.text;
+            eppTags.innerHTML = msg.epps.map(e => `<span class="epp-tag">${e}</span>`).join('');
+            const card = document.getElementById('messageCard');
+            card.style.animation = 'none'; card.offsetHeight; card.style.animation = 'slideUp 0.5s ease';
+            fingerCountDisplay.classList.add('visible');
+            if ('speechSynthesis' in window && !speakTriggered.has(count)) {
+                speakTriggered.add(count);
+                const u = new SpeechSynthesisUtterance(`Regla ${count}. ${msg.title.replace(/^[^—]+—\s*/, '')}`);
+                u.lang = 'es-ES'; u.rate = 0.85; speechSynthesis.speak(u);
+            }
+            if (seenRules.size === 5 && appState === 'SCANNING') { setTimeout(prepareFinale, 3000); }
+        }
+
+        function prepareFinale() {
+            appState = 'FINALE_WAITING';
+            fingerCountDisplay.classList.remove('visible');
+            statusText.textContent = "¡REGLAS COMPLETADAS!";
+            msgIcon.textContent = "🤝";
+            msgTitle.textContent = "¡EL GRAN FINAL!";
+            msgText.textContent = "Has aprendido las 5 reglas. Ahora junta tus manos frente a la cámara para recibir tu medalla de seguridad.";
+            eppTags.innerHTML = '<span class="epp-tag">JUNTA TUS MANOS</span>';
+            fingerCountDisplay.classList.add('visible');
+            if ('speechSynthesis' in window) {
+                const u = new SpeechSynthesisUtterance("¡Felicidades! Has aprendido las cinco reglas. Ahora junta tus manos frente a la cámara para recibir tu medalla de seguridad.");
+                u.lang = 'es-ES'; u.rate = 0.9; speechSynthesis.speak(u);
+            }
+        }
+
+        function startFinale() {
+            if (appState === 'FINALE_ACTIVE') return;
+            appState = 'FINALE_ACTIVE';
+            const music = document.getElementById('winMusic');
+            music.volume = 0.5; music.play().catch(e => console.warn("Audio play failed:", e));
+            document.getElementById('heartOverlay').classList.add('active');
+            fingerCountDisplay.classList.remove('visible');
+            setTimeout(() => {
+                document.getElementById('medalContainer').classList.add('falling');
+                if ('speechSynthesis' in window) {
+                    const u = new SpeechSynthesisUtterance("Recibe tu medalla de oro en seguridad. ¡Bien hecho!");
+                    u.lang = 'es-ES'; u.rate = 0.9; speechSynthesis.speak(u);
+                }
+            }, 1000);
+            setTimeout(() => {
+                document.getElementById('congratsBanner').classList.add('visible');
+                createExplosion();
+            }, 3000);
+        }
+
+        function createExplosion() {
+            // Destellos mágicos morados y dorados
+            for (let i = 0; i < 150; i++) {
+                particles.push({
+                    x: window.innerWidth / 2, y: window.innerHeight / 2,
+                    vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 0.5) * 15,
+                    size: Math.random() * 6 + 2, alpha: 1,
+                    color: i % 2 === 0 ? `hsl(280, 100%, 70%)` : `hsl(45, 100%, 60%)`,
+                    gravity: 0.02, life: 1.2
+                });
+            }
+        }
+
+        function onResults(results) {
+            canvasEl.width = window.innerWidth; canvasEl.height = window.innerHeight;
+
+            // 1. Fondo atmosférico
+            ctx.save();
+            ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+
+            if (appState === 'STANDBY') {
+                ctx.fillStyle = 'rgba(11, 12, 16, 0.7)';
+                ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+                ctx.filter = 'blur(10px)';
+                ctx.drawImage(canvasEl, 0, 0);
+                ctx.filter = 'none';
+            } else {
+                ctx.fillStyle = 'rgba(11, 12, 16, 0.3)';
+                ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+            }
+            ctx.restore();
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                results.multiHandLandmarks.forEach(landmarks => drawHandSkeleton(landmarks));
+
+                const landmarks = results.multiHandLandmarks[0];
+                const { count, fingers } = countFingers(landmarks);
+
+                if (appState === 'STANDBY') {
+                    if (count === 2) {
+                        standbyStable++;
+                        statusText.textContent = `ACTIVANDO... ${Math.round(standbyStable / 15 * 100)}%`;
+                        if (standbyStable >= 15) unlockSystem();
+                    } else {
+                        standbyStable = 0;
+                        statusText.textContent = 'MUESTRA ✌️ PARA INICIAR';
+                    }
+                } else if (appState === 'SCANNING') {
+                    updateDisplay(count, fingers);
+                    statusDot.classList.add('active'); statusText.classList.add('active');
+                    statusText.textContent = count > 0 ? `REGLA ${count}` : 'Escaneando...';
+                } else if (appState === 'FINALE_WAITING' && results.multiHandLandmarks.length === 2) {
+                    const h1 = results.multiHandLandmarks[0][9];
+                    const h2 = results.multiHandLandmarks[1][9];
+                    const dist = Math.hypot(h1.x - h2.x, h1.y - h2.y);
+                    if (dist < 0.2) startFinale();
+                }
+                videoWrapper.classList.add('detected'); videoWrapper.classList.add('scanning');
+            } else {
+                if (appState === 'STANDBY') {
+                    statusText.textContent = 'ESPERANDO MANO...';
+                } else {
+                    statusDot.classList.remove('active'); statusText.classList.remove('active'); statusText.textContent = 'Escaneando...';
+                }
+                videoWrapper.classList.remove('detected'); videoWrapper.classList.remove('scanning');
+                fingerDots.forEach(d => d.classList.remove('up')); fingerIcons.forEach(fi => fi.classList.remove('is-up'));
+                lastCount = -1; stableCount = 0;
+                if (appState === 'SCANNING') fingerCountDisplay.classList.remove('visible');
+                speakTriggered.clear();
+            }
+        }
+
+        const hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}` });
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+        hands.onResults(onResults);
+
+        function startScanner() {
+            loadingMsg.classList.remove('hidden');
+            const camera = new Camera(videoEl, {
+                onFrame: async () => { await hands.send({ image: videoEl }) },
+                width: 1280, height: 720
+            });
+            camera.start()
+                .then(() => {
+                    loadingMsg.classList.add('hidden');
+                    videoWrapper.classList.add('scanning');
+                    statusText.textContent = 'ESPERANDO GESTO...';
+
+                    // Voz de instrucción inicial
+                    if ('speechSynthesis' in window) {
+                        const u = new SpeechSynthesisUtterance(
+                            "Bienvenido al escáner de seguridad Sinba. " +
+                            "Permite el acceso a la cámara cuando el navegador lo solicite. " +
+                            "Coloca tu mano frente a la cámara y muestra entre uno y cinco dedos. " +
+                            "Mantén la mano quieta durante unos segundos. " +
+                            "El sistema reconocerá automáticamente la cantidad de dedos y mostrará la regla de seguridad correspondiente. " +
+                            "Un dedo corresponde a la regla uno. " +
+                            "Dos dedos corresponden a la regla dos y asi sucesivamente " +
+                            "Usa buena iluminación y mantén la palma abierta para un mejor reconocimiento. " +
+                            "Y recuerda: una mano puede contar hasta cinco, pero una decisión segura puede proteger toda una vida. " +
+                            "Para iniciar el sistema, muestra el gesto de la paz con dos dedos frente a la cámara."
+                        );
+
+                        u.lang = 'es-ES';
+                        u.rate = 0.9;
+                        u.pitch = 1;
+                        u.volume = 1;
+
+                        speechSynthesis.speak(u);
+                    }
+                })
+                .catch(err => {
+                    loadingMsg.innerHTML = `<div><div style="color:#ff4444;margin-bottom:8px">⚠ Error de cámara</div><div style="font-size:.7rem;color:rgba(255,255,255,.4)">${err.message}</div></div>`;
+                });
+        }
+
+        function unlockSystem() {
+            appState = 'SCANNING';
+            const instr = document.querySelector('.instructions');
+            instr.classList.add('hidden');
+            setTimeout(() => instr.style.display = 'none', 500);
+
+            if ('speechSynthesis' in window) {
+                const u = new SpeechSynthesisUtterance("Sistema desbloqueado. Iniciando escaneo de seguridad Sinba.");
+                u.lang = 'es-ES'; u.rate = 0.95; speechSynthesis.speak(u);
+            }
+        }
+
+        window.onload = startScanner;
+
+    </script>
+    <script type="module">
+        import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/loaders/GLTFLoader.js';
+        const tc = document.getElementById('threeCanvas');
+        const renderer = new THREE.WebGLRenderer({ canvas: tc, alpha: true, antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        const scene = new THREE.Scene();
+        const cam = new THREE.PerspectiveCamera(45, 4 / 3, 0.1, 100);
+        cam.position.set(0, 1.2, 3);
+        cam.lookAt(0, 0.5, 0);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const dl = new THREE.DirectionalLight(0xffaa00, 1.5); dl.position.set(2, 3, 2); scene.add(dl);
+        const pl = new THREE.PointLight(0xff6600, 1, 10); pl.position.set(-1, 2, 1); scene.add(pl);
+        let model = null;
+        const loader = new GLTFLoader();
+        loader.load('Trees.glb', (gltf) => {
+            model = gltf.scene;
+            model.scale.set(0.35, 0.35, 0.35);
+            model.position.set(1.0, 1.4, 0);
+            model.rotation.set(0, 0, 0.3);
+            scene.add(model);
+            if (gltf.animations && gltf.animations.length > 0) {
+                const mixer = new THREE.AnimationMixer(model);
+                gltf.animations.forEach(c => mixer.clipAction(c).play());
+                const clock = new THREE.Clock();
+                (function anim() { requestAnimationFrame(anim); mixer.update(clock.getDelta()) })();
+            }
+        }, undefined, (e) => console.warn('GLB load error:', e));
+        function resizeRenderer() {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            cam.aspect = window.innerWidth / window.innerHeight;
+            cam.updateProjectionMatrix();
+        }
+        resizeRenderer();
+        window.addEventListener('resize', resizeRenderer);
+        new ResizeObserver(resizeRenderer).observe(tc.parentElement);
+        (function render() {
+            requestAnimationFrame(render);
+            if (model) { model.rotation.y += 0.008; }
+            renderer.render(scene, cam);
+        })();
+    </script>
+</body>
+
+</html>
